@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 update_dashboard.py
 -------------------
-讀取瓦斯用量 Excel (.xlsm) 的 Daily_Summary sheet，更新 index.html 的每日用量資料，
+讀取瓦斯用量 Excel (.xlsm) 的 Daily_Summary sheet，更新 index.html 的每日用量資料；
+互動式詢問是否要新增一筆從 gas.e-letter.com.tw 抄錄的帳單（度數/單價/合計）；
 然後 git commit + push 到 GitHub。
 
-實際帳單（KNOWN_BILLS）無法從 Excel 自動讀取，需手動維護於本檔的 KNOWN_BILLS 區塊
-（資料來源：gas.e-letter.com.tw 歷史帳單）。
+雙擊執行：更新瓦斯Dashboard.bat
 
 使用方式：
   python update_dashboard.py
   python update_dashboard.py --dry-run
+  python update_dashboard.py --no-bill-prompt   (略過詢問新帳單，純同步用量)
 """
 
 import argparse, json, re, subprocess, sys
@@ -74,6 +76,39 @@ def update_html(html_path: Path, daily: list, bills: list) -> bool:
     return True
 
 
+def prompt_new_bill():
+    print()
+    ans = input("是否要新增一筆 gas.e-letter.com.tw 的帳單記錄？(y/n)：").strip().lower()
+    if ans != "y":
+        return None
+    try:
+        deg = float(input("  計費氣量（度數）：").strip())
+        rate = float(input("  單價：").strip())
+        base = float((input("  基本費（直接按 Enter 預設 300）：").strip() or "300"))
+        total = round(deg * rate + base)
+        confirm_total = input(f"  合計金額（直接按 Enter 採用試算值 ${total}）：").strip()
+        if confirm_total:
+            total = float(confirm_total)
+        return {"deg": deg, "rate": rate, "base": base, "total": total}
+    except ValueError:
+        print("輸入格式錯誤，已取消新增帳單。")
+        return None
+
+
+def save_known_bills(py_path: Path, bills: list):
+    content = py_path.read_text(encoding="utf-8")
+    bills_src = "[\n" + "\n".join(
+        f'    {{"deg": {b["deg"]}, "rate": {b["rate"]}, "base": {b["base"]}, "total": {b["total"]}}},'
+        for b in bills
+    ) + "\n]"
+    pattern = r"KNOWN_BILLS = \[.*?\]"
+    new_content, count = re.subn(pattern, f"KNOWN_BILLS = {bills_src}", content, count=1, flags=re.DOTALL)
+    if count == 0:
+        print("找不到 KNOWN_BILLS 區塊，無法寫回腳本"); return False
+    py_path.write_text(new_content, encoding="utf-8")
+    return True
+
+
 def git_push(message: str, files: list):
     for f in files:
         subprocess.run(["git", "add", f], check=True)
@@ -91,11 +126,13 @@ def main():
     parser.add_argument("--excel", default=DEFAULT_EXCEL)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--message", default="")
+    parser.add_argument("--no-bill-prompt", action="store_true")
     args = parser.parse_args()
 
     repo_root = Path(__file__).parent
     excel_path = Path(args.excel) if Path(args.excel).is_absolute() else repo_root / args.excel
     html_path = repo_root / HTML_FILE
+    py_path = Path(__file__)
 
     if not excel_path.exists():
         print(f"找不到 Excel：{excel_path}"); sys.exit(1)
@@ -104,7 +141,20 @@ def main():
     if not daily:
         print("沒有讀到資料"); sys.exit(1)
 
-    if not update_html(html_path, daily, KNOWN_BILLS):
+    bills = KNOWN_BILLS
+    if not args.no_bill_prompt:
+        new_bill = prompt_new_bill()
+        if new_bill:
+            bills = KNOWN_BILLS + [new_bill]
+            if save_known_bills(py_path, bills):
+                print(f"  已新增帳單並寫回 {py_path.name}：{new_bill}")
+            files_changed = [HTML_FILE, py_path.name]
+        else:
+            files_changed = [HTML_FILE]
+    else:
+        files_changed = [HTML_FILE]
+
+    if not update_html(html_path, daily, bills):
         sys.exit(1)
 
     if args.dry_run:
@@ -112,7 +162,7 @@ def main():
 
     latest = daily[-1][0]
     msg = args.message or f"update dashboard: 最新資料至 {latest}"
-    git_push(msg, [HTML_FILE])
+    git_push(msg, files_changed)
     print(f"完成！Dashboard 已更新至 {latest}")
 
 
