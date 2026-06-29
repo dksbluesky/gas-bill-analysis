@@ -111,7 +111,7 @@ tbody tr:hover td{background:#FFF7ED}
     </div>
   </div>
   <div class="kpi kpi-amber">
-    <div class="kpi-head"><span>💰 估算月費</span></div>
+    <div class="kpi-head"><span>💰 估算雙月費</span></div>
     <div class="kpi-body">
       <div class="kpi-val" id="v4">—</div>
       <div class="kpi-note" id="n4">—</div>
@@ -159,7 +159,7 @@ tbody tr:hover td{background:#FFF7ED}
       </div>
     </div>
     <div class="card">
-      <div class="card-title">💹 月度估算費用</div>
+      <div class="card-title">💹 雙月估算費用</div>
       <div class="chart-wrap" style="height:210px">
         <canvas id="cCost"></canvas>
       </div>
@@ -172,22 +172,22 @@ tbody tr:hover td{background:#FFF7ED}
           <tbody id="tbBill"></tbody>
         </table>
       </div>
-      <div class="note">來源：gas.e-letter.com.tw 歷史帳單（月結）。單價隨中油牌價每週調整，本表僅供估算其他月份費用參考。</div>
+      <div class="note">來源：gas.e-letter.com.tw 歷史帳單（雙月結算）。單價隨中油牌價每週調整，本表僅供估算其他期間費用參考。</div>
     </div>
   </div>
 
   <!-- Table -->
   <div class="tbl-card">
-    <div class="card-title">📋 月度明細（依日曆月彙總，非實際計費週期）</div>
+    <div class="card-title">📋 雙月明細（依日曆雙月彙總，非實際計費週期）</div>
     <div style="overflow-x:auto">
       <table>
         <thead><tr>
-          <th>月份</th><th>記錄天數</th><th>總用量</th><th>日均用量</th><th>估算費用</th><th>備註</th>
+          <th>期間</th><th>記錄天數</th><th>總用量</th><th>日均用量</th><th>估算費用</th><th>備註</th>
         </tr></thead>
         <tbody id="tb"></tbody>
       </table>
     </div>
-    <div class="note">估算費用 = 用量 × 最新已知單價（13.41/度）+ 基本費 $300，僅為粗估，實際帳單依瓦斯公司計費週期與當期牌價計算。</div>
+    <div class="note">估算費用 = 雙月用量 × 最新已知單價（13.41/度）+ 基本費 $300（每期收一次），僅為粗估，實際帳單依瓦斯公司計費週期與當期牌價計算。</div>
   </div>
 </div>
 
@@ -231,6 +231,24 @@ const YEARLY = (()=>{
   return [...m.values()].sort((a,b)=>a.key.localeCompare(b.key));
 })();
 
+// 瓦斯為雙月計費（1-2月、3-4月...6期/年），每期收一次基本費 $300
+function bimonthKey(d){
+  const y=d.slice(0,4), m=parseInt(d.slice(5,7),10);
+  const pairStart=m-((m-1)%2);
+  return `${y}-${String(pairStart).padStart(2,'0')}`;
+}
+function bimonthLabel(k){const[y,m]=k.split('-');const ms=parseInt(m,10);return `${y}/${ms}-${ms+1}`}
+
+const BIMONTHLY = (()=>{
+  const m=new Map();
+  for(const[date,usage] of DAILY){
+    const k=bimonthKey(date);
+    if(!m.has(k))m.set(k,{key:k,total:0,days:0});
+    const g=m.get(k); g.total+=usage; g.days++;
+  }
+  return [...m.values()].sort((a,b)=>a.key.localeCompare(b.key));
+})();
+
 function isWinter(monthKey){
   const m=parseInt(monthKey.split('-')[1],10);
   return m<=2 || m>=11; // Nov-Feb as heating-heavy winter
@@ -260,8 +278,9 @@ const legFont={size:11};
 function renderKPI(){
   const totalAll = DAILY.reduce((a,[,u])=>a+u,0);
   const lastMonth = MONTHLY[MONTHLY.length-1];
+  const lastBimonth = BIMONTHLY[BIMONTHLY.length-1];
   const avgDaily = totalAll / DAILY.length;
-  const estCost = lastMonth ? Math.round(lastMonth.total*LATEST_RATE + BASE_FEE) : null;
+  const estCost = lastBimonth ? Math.round(lastBimonth.total*LATEST_RATE + BASE_FEE) : null;
 
   $('v1').textContent = num(totalAll,1)+' 度';
   $('n1').textContent = `${DAILY[0][0]} ~ ${DAILY[DAILY.length-1][0]}`;
@@ -270,7 +289,7 @@ function renderKPI(){
   $('v3').textContent = lastMonth ? num(lastMonth.total,1)+' 度' : '—';
   $('n3').textContent = lastMonth ? monthLabel(lastMonth.key)+`（${lastMonth.days}天）` : '—';
   $('v4').textContent = estCost!=null ? money(estCost) : '—';
-  $('n4').textContent = `依最新單價 $${LATEST_RATE}/度 + 基本費估算`;
+  $('n4').textContent = lastBimonth ? `${bimonthLabel(lastBimonth.key)}，單價$${LATEST_RATE}/度 + 基本費一次` : '—';
 }
 
 // ── Daily trend chart ──
@@ -344,11 +363,11 @@ function renderYear(){
   );
 }
 
-// ── Monthly estimated cost bar ──
+// ── Bi-monthly estimated cost bar ──
 function renderCost(){
-  const costs = MONTHLY.map(r=>r.total*LATEST_RATE+BASE_FEE);
+  const costs = BIMONTHLY.map(r=>r.total*LATEST_RATE+BASE_FEE);
   mk('cCost','bar',
-    {labels:MONTHLY.map(r=>monthLabel(r.key)),datasets:[
+    {labels:BIMONTHLY.map(r=>bimonthLabel(r.key)),datasets:[
       {label:'估算費用',data:costs,
        backgroundColor:C.amber,borderRadius:4}
     ]},
@@ -374,12 +393,12 @@ function renderBills(){
 
 // ── Detail table ──
 function renderTable(){
-  $('tb').innerHTML = MONTHLY.map(r=>{
+  $('tb').innerHTML = BIMONTHLY.map(r=>{
     const avg = r.total/r.days;
     const est = r.total*LATEST_RATE+BASE_FEE;
-    const isPartial = r.days < 25;
+    const isPartial = r.days < 50;
     return `<tr>
-      <td class="tc"><b>${monthLabel(r.key)}</b></td>
+      <td class="tc"><b>${bimonthLabel(r.key)}</b></td>
       <td class="tc">${r.days}</td>
       <td class="tr">${num(r.total,2)} 度</td>
       <td class="tr">${num(avg,3)} 度</td>
