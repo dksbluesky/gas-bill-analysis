@@ -21,7 +21,7 @@ except ImportError:
     openpyxl = None
 
 REPO_ROOT = Path(__file__).parent
-DEFAULT_EXCEL = r"C:\Users\dk098\Documents\House related\Gas usage.xlsm"
+DEFAULT_EXCEL = r"D:\AI application code\gas-bill-analysis\Gas usage.xlsm"
 HTML_FILE = REPO_ROOT / "index.html"
 PY_FILE = REPO_ROOT / "update_dashboard.py"
 SHEET = "Daily_Summary"

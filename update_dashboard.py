@@ -24,7 +24,7 @@ except ImportError:
     print("缺少 openpyxl，請執行：pip install openpyxl")
     sys.exit(1)
 
-DEFAULT_EXCEL = r"C:\Users\dk098\Documents\House related\Gas usage.xlsm"
+DEFAULT_EXCEL = r"D:\AI application code\gas-bill-analysis\Gas usage.xlsm"
 HTML_FILE     = "index.html"
 SHEET         = "Daily_Summary"
 
