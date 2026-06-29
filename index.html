@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🔥瓦斯用量分析 Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;background:#FFF7ED;color:#1E293B;min-height:100vh}
+
+/* TOPBAR */
+.topbar{
+  background:linear-gradient(90deg,#9A3412 0%,#EA580C 100%);
+  padding:14px 28px;display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:10px
+}
+.topbar h1{color:#fff;font-size:1.2rem;font-weight:800;letter-spacing:.5px}
+.topbar p{color:#FED7AA;font-size:0.72rem;margin-top:2px}
+.filter-row{display:flex;gap:6px;flex-wrap:wrap}
+.fbtn{
+  padding:5px 14px;border-radius:6px;border:1.5px solid rgba(255,255,255,.3);
+  background:rgba(255,255,255,.1);color:#fff;font-size:0.78rem;font-weight:700;
+  cursor:pointer;transition:all .15s
+}
+.fbtn:hover{background:rgba(255,255,255,.25)}
+.fbtn.on{background:#fff;color:#EA580C;border-color:#fff}
+
+/* KPI ROW */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:20px 24px 0}
+@media(max-width:900px){.kpi-row{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:500px){.kpi-row{grid-template-columns:1fr 1fr}}
+
+.kpi{background:#fff;border-radius:10px;overflow:hidden;
+     box-shadow:0 2px 10px rgba(0,0,0,.08)}
+.kpi-head{padding:8px 14px;display:flex;align-items:center;gap:8px}
+.kpi-head span{font-size:0.7rem;font-weight:800;color:#fff;letter-spacing:.8px;text-transform:uppercase}
+.kpi-body{padding:12px 16px 14px}
+.kpi-val{font-size:1.65rem;font-weight:800;color:#1E293B;letter-spacing:-1px;line-height:1.1}
+.kpi-note{font-size:0.9rem;color:#94A3B8;margin-top:4px;font-weight:600}
+
+.kpi-orange .kpi-head{background:#EA580C}
+.kpi-blue   .kpi-head{background:#2563EB}
+.kpi-green  .kpi-head{background:#059669}
+.kpi-amber  .kpi-head{background:#D97706}
+
+/* MAIN GRID */
+.main{padding:16px 24px 24px;max-width:1400px;margin:0 auto}
+
+.row1{display:grid;grid-template-columns:2fr 1fr 1fr;gap:14px;margin-top:16px}
+.row2{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:14px}
+@media(max-width:1100px){.row1{grid-template-columns:1fr 1fr}.row2{grid-template-columns:1fr 1fr}}
+@media(max-width:700px){.row1,.row2{grid-template-columns:1fr}}
+
+.card{background:#fff;border-radius:10px;padding:16px 18px;
+      box-shadow:0 2px 10px rgba(0,0,0,.07)}
+.card-title{font-size:0.8rem;font-weight:800;color:#334155;margin-bottom:12px;
+            padding-bottom:8px;border-bottom:1.5px solid #F1F5F9;
+            display:flex;align-items:center;justify-content:space-between;gap:8px}
+.chart-wrap{position:relative;width:100%}
+.sub-filter{display:flex;gap:4px}
+.sbtn{padding:2px 8px;border-radius:5px;border:1px solid #FED7AA;background:#FFF7ED;
+      color:#9A3412;font-size:0.65rem;font-weight:700;cursor:pointer}
+.sbtn.on{background:#EA580C;color:#fff;border-color:#EA580C}
+
+/* TABLE */
+.tbl-card{background:#fff;border-radius:10px;padding:16px 18px;
+          box-shadow:0 2px 10px rgba(0,0,0,.07);margin-top:14px}
+table{width:100%;border-collapse:collapse;font-size:0.8rem}
+thead th{background:#F8FAFC;color:#475569;font-weight:700;padding:8px 12px;
+         text-align:center;border-bottom:2px solid #E2E8F0}
+tbody td{padding:7px 12px;border-bottom:1px solid #F8FAFC;vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:#FFF7ED}
+.tc{text-align:center}.tr{text-align:right}
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:0.68rem;font-weight:700}
+.bact{background:#DCFCE7;color:#15803D}.best{background:#FEF3C7;color:#B45309}
+.note{font-size:0.72rem;color:#94A3B8;margin-top:8px;line-height:1.5}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1>🔥 瓦斯用量分析 Dashboard</h1>
+    <p>每日用量自動記錄（無雙月帳單資料，僅追蹤實際用量；費用為估算值）</p>
+  </div>
+</div>
+
+<!-- KPI -->
+<div class="kpi-row">
+  <div class="kpi kpi-orange">
+    <div class="kpi-head"><span>🔥 累計總用量</span></div>
+    <div class="kpi-body">
+      <div class="kpi-val" id="v1">—</div>
+      <div class="kpi-note" id="n1">—</div>
+    </div>
+  </div>
+  <div class="kpi kpi-blue">
+    <div class="kpi-head"><span>📏 平均每日用量</span></div>
+    <div class="kpi-body">
+      <div class="kpi-val" id="v2">—</div>
+      <div class="kpi-note" id="n2">—</div>
+    </div>
+  </div>
+  <div class="kpi kpi-green">
+    <div class="kpi-head"><span>📅 上月用量</span></div>
+    <div class="kpi-body">
+      <div class="kpi-val" id="v3">—</div>
+      <div class="kpi-note" id="n3">—</div>
+    </div>
+  </div>
+  <div class="kpi kpi-amber">
+    <div class="kpi-head"><span>💰 估算月費</span></div>
+    <div class="kpi-body">
+      <div class="kpi-val" id="v4">—</div>
+      <div class="kpi-note" id="n4">—</div>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <!-- Row 1 -->
+  <div class="row1">
+    <div class="card">
+      <div class="card-title">
+        <span>📈 每日用量趨勢</span>
+        <div class="sub-filter" id="sg">
+          <button class="sbtn" data-d="90">近3個月</button>
+          <button class="sbtn" data-d="180">近6個月</button>
+          <button class="sbtn on" data-d="365">近1年</button>
+          <button class="sbtn" data-d="all">全部</button>
+        </div>
+      </div>
+      <div class="chart-wrap" style="height:240px">
+        <canvas id="cDaily"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">📊 每月用量</div>
+      <div class="chart-wrap" style="height:240px">
+        <canvas id="cMonth"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">🍩 冬季 vs 夏季 用量佔比</div>
+      <div class="chart-wrap" style="height:240px">
+        <canvas id="cPie"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 2 -->
+  <div class="row2">
+    <div class="card">
+      <div class="card-title">📆 年度彙總</div>
+      <div class="chart-wrap" style="height:210px">
+        <canvas id="cYear"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">💹 月度估算費用</div>
+      <div class="chart-wrap" style="height:210px">
+        <canvas id="cCost"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">🧾 實際帳單記錄</div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>度數</th><th>單價</th><th>基本費</th><th>合計</th></tr></thead>
+          <tbody id="tbBill"></tbody>
+        </table>
+      </div>
+      <div class="note">來源：gas.e-letter.com.tw 歷史帳單（月結）。單價隨中油牌價每週調整，本表僅供估算其他月份費用參考。</div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="tbl-card">
+    <div class="card-title">📋 月度明細（依日曆月彙總，非實際計費週期）</div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>月份</th><th>記錄天數</th><th>總用量</th><th>日均用量</th><th>估算費用</th><th>備註</th>
+        </tr></thead>
+        <tbody id="tb"></tbody>
+      </table>
+    </div>
+    <div class="note">估算費用 = 用量 × 最新已知單價（13.41/度）+ 基本費 $300，僅為粗估，實際帳單依瓦斯公司計費週期與當期牌價計算。</div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// DATA BLOCK — Claude Code 同步更新此區塊
+// ══════════════════════════════════════════════
+const DAILY = [["2025-02-01",9.0],["2025-02-11",0.159],["2025-02-12",0.173],["2025-02-13",0.165],["2025-02-14",0.35],["2025-02-15",0.464],["2025-02-16",0.463],["2025-02-17",0.497],["2025-02-18",0.403],["2025-02-19",0.468],["2025-02-20",0.334],["2025-02-21",0.5],["2025-02-22",0.295],["2025-02-23",0.513],["2025-02-24",0.279],["2025-02-25",0.337],["2025-02-26",0.272],["2025-02-27",0.332],["2025-02-28",0.205],["2025-03-01",0.22],["2025-03-02",0.198],["2025-03-03",0.077],["2025-03-04",0.074],["2025-03-05",0.072],["2025-03-06",0.23],["2025-03-07",0.321],["2025-03-08",0.207],["2025-03-09",0.371],["2025-03-10",0.227],["2025-03-12",0.254],["2025-03-13",0.199],["2025-03-14",0.172],["2025-03-15",0.187],["2025-03-16",0.344],["2025-03-17",0.203],["2025-03-18",0.282],["2025-03-19",0.217],["2025-03-20",0.361],["2025-03-21",0.194],["2025-03-22",0.307],["2025-03-23",0.28],["2025-03-24",0.339],["2025-03-25",0.232],["2025-03-26",0.205],["2025-03-27",0.136],["2025-03-28",0.251],["2025-03-29",0.172],["2025-03-30",0.07],["2025-03-31",0.052],["2025-04-01",0.104],["2025-04-02",0.05],["2025-04-03",0.067],["2025-04-04",0.093],["2025-04-05",0.184],["2025-04-06",0.214],["2025-04-07",0.178],["2025-04-08",0.227],["2025-04-09",0.147],["2025-04-10",0.173],["2025-04-11",0.193],["2025-04-12",0.13],["2025-04-13",0.161],["2025-04-14",0.136],["2025-04-15",0.112],["2025-04-17",0.151],["2025-04-18",0.108],["2025-04-19",0.141],["2025-04-20",0.108],["2025-04-21",0.141],["2025-04-22",0.098],["2025-04-23",0.139],["2025-04-24",0.11],["2025-04-25",0.124],["2025-04-26",0.094],["2025-04-27",0.069],["2025-04-29",0.034],["2025-04-30",0.034],["2025-05-01",0.038],["2025-05-02",0.032],["2025-05-03",0.048],["2025-05-04",0.026],["2025-05-05",0.027],["2025-05-06",0.028],["2025-05-07",0.025],["2025-05-08",0.022],["2025-05-09",0.065],["2025-05-10",0.105],["2025-05-11",0.066],["2025-05-12",0.087],["2025-05-13",0.061],["2025-05-14",0.087],["2025-05-15",0.066],["2025-05-16",0.067],["2025-05-17",0.059],["2025-05-18",0.078],["2025-05-19",0.057],["2025-05-20",0.066],["2025-05-21",0.038],["2025-05-22",0.06],["2025-05-23",0.028],["2025-05-24",0.062],["2025-05-25",0.045],["2025-05-26",0.092],["2025-05-27",0.054],["2025-05-28",0.072],["2025-05-29",0.045],["2025-05-30",0.086],["2025-05-31",0.048],["2025-06-01",0.078],["2025-06-02",0.016],["2025-06-03",0.0],["2025-06-04",0.03],["2025-06-05",0.016],["2025-06-06",0.016],["2025-06-07",0.017],["2025-06-08",0.009],["2025-06-09",0.0],["2025-06-10",0.0],["2025-06-11",0.04],["2025-06-12",0.055],["2025-06-13",0.057],["2025-06-14",0.074],["2025-06-15",0.061],["2025-06-16",0.085],["2025-06-17",0.069],["2025-06-18",0.031],["2025-06-19",0.049],["2025-06-20",0.068],["2025-06-21",0.037],["2025-06-22",0.047],["2025-06-23",0.0],["2025-06-24",0.032],["2025-06-25",0.0],["2025-06-26",0.073],["2025-06-27",0.0],["2025-06-28",0.028],["2025-06-29",0.0],["2025-06-30",0.019],["2025-07-01",0.0],["2025-07-02",0.0],["2025-07-03",0.0],["2025-07-04",0.0],["2025-07-05",0.0],["2025-07-06",0.037],["2025-07-07",0.0],["2025-07-08",0.0],["2025-07-09",0.0],["2025-07-10",0.0],["2025-07-11",0.0],["2025-07-12",0.0],["2025-07-13",0.024],["2025-07-14",0.0],["2025-07-15",0.025],["2025-07-16",0.0],["2025-07-17",0.051],["2025-07-18",0.0],["2025-07-19",0.05],["2025-07-20",0.0],["2025-07-21",0.056],["2025-07-22",0.0],["2025-07-23",0.038],["2025-07-24",0.0],["2025-07-25",0.049],["2025-07-26",0.0],["2025-07-27",0.021],["2025-07-28",0.0],["2025-07-29",0.039],["2025-07-30",0.0],["2025-08-01",0.0],["2025-08-02",0.0],["2025-08-03",0.0],["2025-08-04",0.0],["2025-08-05",0.0],["2025-08-06",0.0],["2025-08-07",0.0],["2025-08-08",0.0],["2025-08-09",0.0],["2025-08-10",0.0],["2025-08-11",0.0],["2025-08-12",0.0],["2025-08-13",0.046],["2025-08-14",0.0],["2025-08-15",0.0],["2025-08-16",0.0],["2025-08-17",0.0],["2025-08-18",0.0],["2025-08-19",0.071],["2025-08-20",0.0],["2025-08-21",0.062],["2025-08-22",0.0],["2025-08-23",0.04],["2025-08-24",0.0],["2025-08-25",0.038],["2025-08-26",0.0],["2025-08-27",0.0],["2025-08-28",0.0],["2025-08-29",0.04],["2025-08-30",0.0],["2025-08-31",0.056],["2025-09-01",0.0],["2025-09-02",0.037],["2025-09-03",0.0],["2025-09-04",0.032],["2025-09-05",0.0],["2025-09-06",0.037],["2025-09-07",0.0],["2025-09-08",0.0],["2025-09-09",0.0],["2025-09-10",0.0],["2025-09-11",0.0],["2025-09-12",0.0],["2025-09-13",0.0],["2025-09-14",0.0],["2025-09-15",0.0],["2025-09-16",0.0],["2025-09-17",0.0],["2025-09-18",0.0],["2025-09-19",0.0],["2025-09-20",0.0],["2025-09-21",0.0],["2025-09-22",0.0],["2025-09-23",0.043],["2025-09-24",0.0],["2025-09-25",0.0],["2025-09-26",0.0],["2025-09-27",0.0],["2025-09-28",0.0],["2025-09-29",0.0],["2025-09-30",0.0],["2025-10-01",0.0],["2025-10-02",0.0],["2025-10-03",0.0],["2025-10-04",0.0],["2025-10-05",0.0],["2025-10-06",0.0],["2025-10-07",0.041],["2025-10-08",0.074],["2025-10-09",0.02],["2025-10-10",0.017],["2025-10-11",0.021],["2025-10-12",0.058],["2025-10-13",0.0],["2025-10-14",0.0],["2025-10-15",0.036],["2025-10-16",0.0],["2025-10-17",0.029],["2025-10-18",0.0],["2025-10-19",0.035],["2025-10-20",0.0],["2025-10-21",0.054],["2025-10-22",0.034],["2025-10-23",0.039],["2025-10-24",0.025],["2025-10-25",0.027],["2025-10-26",0.027],["2025-10-27",0.047],["2025-10-28",0.03],["2025-10-29",0.038],["2025-10-30",0.0],["2025-10-31",0.0],["2025-11-01",0.0],["2025-11-02",0.0],["2025-11-03",0.0],["2025-11-04",0.0],["2025-11-05",0.0],["2025-11-06",0.0],["2025-11-07",0.0],["2025-11-08",0.0],["2025-11-09",0.0],["2025-11-10",0.022],["2025-11-11",0.0],["2025-11-12",0.045],["2025-11-13",0.0],["2025-11-14",0.0],["2025-11-15",0.0],["2025-11-16",0.0],["2025-11-17",0.026],["2025-11-18",0.0],["2025-11-19",0.0],["2025-11-20",0.023],["2025-11-21",0.032],["2025-11-22",0.0],["2025-11-23",0.019],["2025-11-24",0.0],["2025-11-25",0.0],["2025-11-26",0.021],["2025-11-27",0.085],["2025-11-28",0.091],["2025-11-29",0.091],["2025-11-30",0.105],["2025-12-01",0.088],["2025-12-02",0.086],["2025-12-03",0.086],["2025-12-04",0.027],["2025-12-05",0.022],["2025-12-06",0.027],["2025-12-07",0.026],["2025-12-08",0.017],["2025-12-09",0.018],["2025-12-10",0.018],["2025-12-11",0.022],["2025-12-12",0.02],["2025-12-13",0.019],["2025-12-14",0.022],["2025-12-15",0.0],["2025-12-16",0.02],["2025-12-17",0.021],["2025-12-18",0.024],["2025-12-19",0.024],["2025-12-20",0.021],["2025-12-21",0.022],["2025-12-22",0.026],["2025-12-23",0.026],["2025-12-24",0.024],["2025-12-25",0.026],["2025-12-26",0.024],["2025-12-27",0.024],["2025-12-28",0.028],["2025-12-29",0.028],["2025-12-30",0.025],["2025-12-31",0.026],["2026-01-01",0.025],["2026-01-02",0.026],["2026-01-03",0.028],["2026-01-04",0.026],["2026-01-05",0.03],["2026-01-06",0.026],["2026-01-07",0.026],["2026-01-08",0.033],["2026-01-09",0.028],["2026-01-10",0.028],["2026-01-11",0.029],["2026-01-12",0.032],["2026-01-13",0.033],["2026-01-14",0.029],["2026-01-15",0.027],["2026-01-16",0.03],["2026-01-17",0.0],["2026-01-18",0.024],["2026-01-19",0.028],["2026-01-20",0.024],["2026-01-21",0.027],["2026-01-22",0.027],["2026-01-23",0.031],["2026-01-24",0.031],["2026-01-25",0.027],["2026-01-26",0.027],["2026-01-27",0.028],["2026-01-28",0.025],["2026-01-29",0.028],["2026-01-30",0.025],["2026-01-31",0.028],["2026-02-01",0.03],["2026-02-02",0.031],["2026-02-03",0.027],["2026-02-04",0.028],["2026-02-05",0.024],["2026-02-06",0.119],["2026-02-07",0.162],["2026-02-08",0.027],["2026-02-09",0.027],["2026-02-10",0.024],["2026-02-11",0.025],["2026-02-12",0.027],["2026-02-13",0.024],["2026-02-14",0.027],["2026-02-15",0.028],["2026-02-16",0.0],["2026-02-17",0.0],["2026-02-18",0.107],["2026-02-19",0.122],["2026-02-20",0.118],["2026-02-21",0.097],["2026-02-22",0.023],["2026-02-23",0.024],["2026-02-24",0.024],["2026-02-25",0.021],["2026-02-26",0.024],["2026-02-27",0.021],["2026-02-28",0.205],["2026-03-01",0.025],["2026-03-02",0.022],["2026-03-03",0.022],["2026-03-04",0.026],["2026-03-05",0.025],["2026-03-06",0.026],["2026-03-07",0.03],["2026-03-08",0.028],["2026-03-09",0.026],["2026-03-10",0.026],["2026-03-11",0.028],["2026-03-12",0.0],["2026-03-13",0.0],["2026-03-14",0.026],["2026-03-15",0.0],["2026-03-16",0.023],["2026-03-17",0.025],["2026-03-18",0.023],["2026-03-19",0.023],["2026-03-20",0.021],["2026-03-21",0.041],["2026-03-22",0.0],["2026-03-23",0.0],["2026-03-24",0.0],["2026-03-25",0.0],["2026-03-26",0.0],["2026-03-27",0.0],["2026-03-28",0.0],["2026-03-29",0.0],["2026-03-30",0.0],["2026-03-31",0.0],["2026-04-01",0.0],["2026-04-02",0.0],["2026-04-03",0.06],["2026-04-04",0.073],["2026-04-05",0.0],["2026-04-06",0.0],["2026-04-07",0.0],["2026-04-08",0.0],["2026-04-09",0.0],["2026-04-10",0.0],["2026-04-11",0.0],["2026-04-12",0.0],["2026-04-13",0.0],["2026-04-14",0.0],["2026-04-15",0.0],["2026-04-16",0.0],["2026-04-17",0.0],["2026-04-18",0.0],["2026-04-19",0.0],["2026-04-20",0.0],["2026-04-21",0.0],["2026-04-22",0.0],["2026-04-23",0.0],["2026-04-24",0.0],["2026-04-25",0.0],["2026-04-26",0.0],["2026-04-27",0.0],["2026-04-28",0.0],["2026-04-29",0.0],["2026-04-30",0.0],["2026-05-01",0.0],["2026-05-02",0.0],["2026-05-03",0.0],["2026-05-04",0.0],["2026-05-05",0.0],["2026-05-06",0.0],["2026-05-07",0.0],["2026-05-08",0.0],["2026-05-09",0.0],["2026-05-10",0.0],["2026-05-11",0.0],["2026-05-12",0.0],["2026-05-13",0.0],["2026-05-14",0.0],["2026-05-15",0.0],["2026-05-16",0.0],["2026-05-17",0.0],["2026-05-18",0.0],["2026-05-19",0.0],["2026-05-20",0.0],["2026-05-21",0.0],["2026-05-22",0.0],["2026-05-23",0.0],["2026-05-24",0.0],["2026-05-25",0.0],["2026-05-26",0.0],["2026-05-27",0.0],["2026-05-28",0.0],["2026-05-29",0.0],["2026-05-30",0.0],["2026-05-31",0.0],["2026-06-01",0.0],["2026-06-02",0.0],["2026-06-03",0.0],["2026-06-04",0.0],["2026-06-05",0.0],["2026-06-06",0.0],["2026-06-07",0.0],["2026-06-08",0.0],["2026-06-09",0.0],["2026-06-10",0.0],["2026-06-11",0.0],["2026-06-12",0.0],["2026-06-13",0.0],["2026-06-14",0.0],["2026-06-15",0.0],["2026-06-16",0.0],["2026-06-17",0.0],["2026-06-18",0.0],["2026-06-19",0.0],["2026-06-20",0.0],["2026-06-21",0.0],["2026-06-22",0.0],["2026-06-23",0.0],["2026-06-24",0.0],["2026-06-25",0.0],["2026-06-26",0.0],["2026-06-27",0.0],["2026-06-28",0.0],["2026-06-29",0.0],["2026-06-30",0.0]];
+// 實際帳單記錄（手動從 gas.e-letter.com.tw 抄錄，無法自動同步）
+const KNOWN_BILLS = [{"deg": 1, "rate": 13.14, "base": 300, "total": 313}, {"deg": 1, "rate": 13.14, "base": 300, "total": 313}, {"deg": 2, "rate": 13.28, "base": 300, "total": 327}, {"deg": 1, "rate": 13.41, "base": 300, "total": 313}];
+// ══════════════════════════════════════════════
+
+const LATEST_RATE = KNOWN_BILLS[KNOWN_BILLS.length-1].rate;
+const BASE_FEE = 300;
+
+const $=id=>document.getElementById(id);
+const num=(n,d=1)=>n==null?'—':n.toLocaleString('zh-TW',{minimumFractionDigits:d,maximumFractionDigits:d});
+const money=n=>n==null?'—':'$'+Math.round(n).toLocaleString('zh-TW');
+
+// ── derive monthly / yearly aggregates from daily data ──
+function monthKey(d){return d.slice(0,7)}
+function monthLabel(k){const[y,m]=k.split('-');return y+'/'+m}
+
+const MONTHLY = (()=>{
+  const m=new Map();
+  for(const[date,usage] of DAILY){
+    const k=monthKey(date);
+    if(!m.has(k))m.set(k,{key:k,total:0,days:0});
+    const g=m.get(k); g.total+=usage; g.days++;
+  }
+  return [...m.values()].sort((a,b)=>a.key.localeCompare(b.key));
+})();
+
+const YEARLY = (()=>{
+  const m=new Map();
+  for(const r of MONTHLY){
+    const y=r.key.slice(0,4);
+    if(!m.has(y))m.set(y,{key:y,total:0});
+    m.get(y).total+=r.total;
+  }
+  return [...m.values()].sort((a,b)=>a.key.localeCompare(b.key));
+})();
+
+function isWinter(monthKey){
+  const m=parseInt(monthKey.split('-')[1],10);
+  return m<=2 || m>=11; // Nov-Feb as heating-heavy winter
+}
+const winterTotal = MONTHLY.filter(r=>isWinter(r.key)).reduce((a,r)=>a+r.total,0);
+const summerTotal = MONTHLY.filter(r=>!isWinter(r.key)).reduce((a,r)=>a+r.total,0);
+
+// chart registry
+const CH={};
+function mk(id,type,data,options){
+  if(CH[id]){CH[id].destroy()}
+  const ctx=$(id).getContext('2d');
+  CH[id]=new Chart(ctx,{type,data,options});
+}
+
+const C={
+  orange:'#EA580C', orange2:'#FDBA74', orange3:'rgba(234,88,12,.12)',
+  blue:'#2563EB', blue2:'#93C5FD',
+  green:'#10B981', amber:'#D97706',
+  slate:'#94A3B8', grid:'#F1F5F9',
+};
+const gridOpts={color:C.grid};
+const tickFont={size:10};
+const legFont={size:11};
+
+// ── KPIs ──
+function renderKPI(){
+  const totalAll = DAILY.reduce((a,[,u])=>a+u,0);
+  const lastMonth = MONTHLY[MONTHLY.length-1];
+  const avgDaily = totalAll / DAILY.length;
+  const estCost = lastMonth ? Math.round(lastMonth.total*LATEST_RATE + BASE_FEE) : null;
+
+  $('v1').textContent = num(totalAll,1)+' 度';
+  $('n1').textContent = `${DAILY[0][0]} ~ ${DAILY[DAILY.length-1][0]}`;
+  $('v2').textContent = num(avgDaily,3)+' 度/日';
+  $('n2').textContent = `全期間共 ${DAILY.length} 天記錄`;
+  $('v3').textContent = lastMonth ? num(lastMonth.total,1)+' 度' : '—';
+  $('n3').textContent = lastMonth ? monthLabel(lastMonth.key)+`（${lastMonth.days}天）` : '—';
+  $('v4').textContent = estCost!=null ? money(estCost) : '—';
+  $('n4').textContent = `依最新單價 $${LATEST_RATE}/度 + 基本費估算`;
+}
+
+// ── Daily trend chart ──
+function renderDaily(days){
+  let rows = DAILY;
+  if(days!=='all'){
+    rows = DAILY.slice(-parseInt(days,10));
+  }
+  mk('cDaily','line',
+    {labels:rows.map(r=>r[0]),datasets:[
+      {label:'每日用量',data:rows.map(r=>r[1]),
+       borderColor:C.orange,backgroundColor:C.orange3,
+       fill:true,tension:.25,pointRadius:0,borderWidth:1.5}
+    ]},
+    {responsive:true,maintainAspectRatio:false,
+     plugins:{legend:{display:false}},
+     scales:{
+       x:{grid:{display:false},ticks:{font:tickFont,maxTicksLimit:8}},
+       y:{grid:gridOpts,ticks:{font:tickFont,callback:v=>v+'度'}}
+     }}
+  );
+}
+
+// ── Monthly bar ──
+function renderMonth(){
+  mk('cMonth','bar',
+    {labels:MONTHLY.map(r=>monthLabel(r.key)),datasets:[
+      {label:'用量',data:MONTHLY.map(r=>r.total),
+       backgroundColor:C.orange2,borderColor:C.orange,borderWidth:1.5,borderRadius:4}
+    ]},
+    {responsive:true,maintainAspectRatio:false,
+     plugins:{legend:{display:false}},
+     scales:{
+       x:{grid:{display:false},ticks:{font:tickFont,maxTicksLimit:10}},
+       y:{grid:gridOpts,ticks:{font:tickFont,callback:v=>v+'度'}}
+     }}
+  );
+}
+
+// ── Pie winter/summer ──
+function renderPie(){
+  mk('cPie','doughnut',
+    {labels:['冬季用量(11-2月)','其他月份'],
+     datasets:[{data:[winterTotal,summerTotal],
+       backgroundColor:[C.blue,C.orange],
+       borderWidth:3,borderColor:'#fff',hoverOffset:10}]},
+    {responsive:true,maintainAspectRatio:false,cutout:'58%',
+     plugins:{
+       legend:{position:'bottom',labels:{font:legFont,padding:12,boxWidth:12}},
+       tooltip:{callbacks:{label:c=>{
+         const t=c.dataset.data.reduce((a,b)=>a+b,0);
+         return ` ${c.label}: ${c.raw.toFixed(1)}度 (${t?(c.raw/t*100).toFixed(1):0}%)`;
+       }}}
+     }}
+  );
+}
+
+// ── Yearly bar ──
+function renderYear(){
+  mk('cYear','bar',
+    {labels:YEARLY.map(r=>r.key+'年'),datasets:[
+      {label:'用量',data:YEARLY.map(r=>r.total),
+       backgroundColor:C.blue2,borderColor:C.blue,borderWidth:1.5,borderRadius:5}
+    ]},
+    {responsive:true,maintainAspectRatio:false,
+     plugins:{legend:{display:false}},
+     scales:{
+       x:{grid:{display:false},ticks:{font:tickFont}},
+       y:{grid:gridOpts,ticks:{font:tickFont,callback:v=>v+'度'}}
+     }}
+  );
+}
+
+// ── Monthly estimated cost bar ──
+function renderCost(){
+  const costs = MONTHLY.map(r=>r.total*LATEST_RATE+BASE_FEE);
+  mk('cCost','bar',
+    {labels:MONTHLY.map(r=>monthLabel(r.key)),datasets:[
+      {label:'估算費用',data:costs,
+       backgroundColor:C.amber,borderRadius:4}
+    ]},
+    {responsive:true,maintainAspectRatio:false,
+     plugins:{legend:{display:false}},
+     scales:{
+       x:{grid:{display:false},ticks:{font:tickFont,maxTicksLimit:10}},
+       y:{grid:gridOpts,ticks:{font:tickFont,callback:v=>'$'+v.toLocaleString()}}
+     }}
+  );
+}
+
+// ── Known bills table ──
+function renderBills(){
+  $('tbBill').innerHTML = KNOWN_BILLS.map(b=>`
+    <tr>
+      <td class="tc">${b.deg} 度</td>
+      <td class="tr">$${b.rate.toFixed(2)}</td>
+      <td class="tr">${money(b.base)}</td>
+      <td class="tr"><b>${money(b.total)}</b></td>
+    </tr>`).join('');
+}
+
+// ── Detail table ──
+function renderTable(){
+  $('tb').innerHTML = MONTHLY.map(r=>{
+    const avg = r.total/r.days;
+    const est = r.total*LATEST_RATE+BASE_FEE;
+    const isPartial = r.days < 25;
+    return `<tr>
+      <td class="tc"><b>${monthLabel(r.key)}</b></td>
+      <td class="tc">${r.days}</td>
+      <td class="tr">${num(r.total,2)} 度</td>
+      <td class="tr">${num(avg,3)} 度</td>
+      <td class="tr">${money(est)}</td>
+      <td class="tc">${isPartial?'<span class="badge best">資料不全</span>':''}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderAll(){
+  renderKPI();
+  renderDaily(document.querySelector('#sg .sbtn.on').dataset.d);
+  renderMonth();
+  renderPie();
+  renderYear();
+  renderCost();
+  renderBills();
+  renderTable();
+}
+
+renderAll();
+
+$('sg').addEventListener('click',e=>{
+  const b=e.target.closest('.sbtn');if(!b)return;
+  document.querySelectorAll('#sg .sbtn').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  renderDaily(b.dataset.d);
+});
+</script>
+</body>
+</html>
