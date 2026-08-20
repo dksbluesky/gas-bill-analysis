@@ -3,7 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#9A3412">
 <title>🔥瓦斯用量分析 Dashboard</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/gas-bill-192.png">
+<link rel="icon" sizes="192x192" href="icons/gas-bill-192.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -427,6 +431,11 @@ $('sg').addEventListener('click',e=>{
   b.classList.add('on');
   renderDaily(b.dataset.d);
 });
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch((error) => console.warn('Service worker registration failed:', error));
+}
 </script>
 </body>
 </html>
