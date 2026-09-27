@@ -86,13 +86,34 @@ def update_html(daily, bills):
 def git_push(message, files):
     for f in files:
         subprocess.run(["git", "add", f], check=True, cwd=REPO_ROOT)
-    result = subprocess.run(["git", "commit", "-m", message], capture_output=True, text=True, cwd=REPO_ROOT)
-    out = result.stdout + result.stderr
-    if "nothing to commit" in out:
-        return "資料未變動，不需要 push"
-    if result.returncode != 0:
-        raise RuntimeError(f"commit 失敗：{result.stderr}")
-    subprocess.run(["git", "push"], check=True, cwd=REPO_ROOT)
+    result = subprocess.run(["git", "commit", "-m", message], capture_output=True, text=True, encoding="utf-8", cwd=REPO_ROOT)
+    out = (result.stdout or "") + (result.stderr or "")
+    nothing_to_commit = "nothing to commit" in out or "no changes added to commit" in out
+    if result.returncode != 0 and not nothing_to_commit:
+        raise RuntimeError(f"commit 失敗：{out.strip()}")
+
+    push = subprocess.run(["git", "push", "origin", "main"], capture_output=True,
+                          text=True, encoding="utf-8", cwd=REPO_ROOT)
+    push_out = (push.stdout or "") + (push.stderr or "")
+
+    if push.returncode != 0 and ("fetch first" in push_out.lower() or
+                                 "non-fast-forward" in push_out.lower()):
+        pull = subprocess.run(["git", "pull", "--rebase", "origin", "main"],
+                              capture_output=True, text=True, encoding="utf-8",
+                              cwd=REPO_ROOT)
+        pull_out = (pull.stdout or "") + (pull.stderr or "")
+        if pull.returncode != 0:
+            raise RuntimeError(f"自動整合 GitHub 更新失敗：{pull_out.strip()}")
+
+        push = subprocess.run(["git", "push", "origin", "main"], capture_output=True,
+                              text=True, encoding="utf-8", cwd=REPO_ROOT)
+        push_out = (push.stdout or "") + (push.stderr or "")
+
+    if push.returncode != 0:
+        raise RuntimeError(f"push 失敗：{push_out.strip()}")
+
+    if nothing_to_commit:
+        return "資料未變動；既有更新已成功 push 到 GitHub！"
     return "已成功 push 到 GitHub！"
 
 
