@@ -35,6 +35,7 @@ KNOWN_BILLS = [
     {"deg": 2, "rate": 13.28, "base": 300, "total": 327},
     {"deg": 1, "rate": 13.41, "base": 300, "total": 313},
     {"deg": 59.0, "rate": 13.41, "base": 300.0, "total": 300.0},
+    {"deg": 59.0, "rate": 13.41, "base": 300.0, "total": 300.0},
 ]
 
 
